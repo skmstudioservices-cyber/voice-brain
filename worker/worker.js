@@ -1,17 +1,21 @@
-// voice-brain-proxy — thin secure proxy to Cloudflare Workers AI.
-// Keeps the CF API token server-side (Worker secret); the browser only ever holds the proxy key.
-// Endpoints: POST /chat {model, messages} with header x-proxy-key. Streams the SSE response.
+// voice-brain-proxy — thin secure proxy to Cloudflare Workers AI + static app host.
+// - GET /*  : serves the app from voice-brain.pages.dev, injecting the proxy key (zero-setup, auto-rotate friendly)
+// - POST /chat {model, messages} with header x-proxy-key : streams Workers AI SSE
+// Secrets (set via deploy-voicebrain.yml): CF_ACCOUNT_ID, CF_API_TOKEN, PROXY_KEY
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, X-Proxy-Key',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 };
 
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
     const url = new URL(request.url);
+
+    if (request.method === 'GET') return serveApp(url, env);
+
     if (request.method !== 'POST' || url.pathname !== '/chat')
       return new Response('not found', { status: 404, headers: CORS });
 
@@ -41,3 +45,21 @@ export default {
     });
   },
 };
+
+async function serveApp(url, env) {
+  const upstream = await fetch('https://voice-brain.pages.dev' + url.pathname);
+  const ct = upstream.headers.get('content-type') || 'text/html; charset=utf-8';
+  if (ct.includes('text/html')) {
+    let html = await upstream.text();
+    // inject the current PROXY_KEY — rotating the key via the deploy workflow auto-propagates on reload
+    html = html.replaceAll('__VB_PROXY_KEY__', env.PROXY_KEY || '__VB_PROXY_KEY__');
+    return new Response(html, {
+      status: upstream.status,
+      headers: { 'Content-Type': ct, 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+  return new Response(upstream.body, {
+    status: upstream.status,
+    headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=3600', 'Access-Control-Allow-Origin': '*' },
+  });
+}
