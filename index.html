@@ -90,7 +90,6 @@
     <select id="provider">
       <option value="groq">Groq (free, fastest)</option>
       <option value="cfproxy">Cloudflare Workers AI — via proxy (recommended)</option>
-      <option value="cf">Cloudflare Workers AI — direct (token in browser)</option>
       <option value="gemini">Google Gemini (free tier)</option>
       <option value="openai">OpenAI</option>
     </select>
@@ -101,8 +100,6 @@
     <input id="proxyKey" type="password" placeholder="x-proxy-key value">
     <label>API Key <small>(stays in this browser only)</small></label>
     <input id="apiKey" type="password" placeholder="paste key (not needed for proxy)">
-    <label>Cloudflare Account ID <small>(sirf direct CF provider ke liye)</small></label>
-    <input id="accountId" placeholder="32-character account id">
     <label>Model</label>
     <input id="model" placeholder="llama-3.3-70b-versatile">
     <div class="hint">CF quick: @cf/meta/llama-3.1-8b-instruct-fp8-fast · CF full: @cf/meta/llama-3.3-70b-instruct-fp8-fast</div>
@@ -129,7 +126,6 @@
 const DEFAULTS = {
   provider: 'groq',
   apiKey: '',
-  accountId: '',
   proxyUrl: 'https://voice-brain-proxy.india-in.workers.dev',
   proxyKey: '',
   model: 'llama-3.3-70b-versatile',
@@ -140,7 +136,6 @@ const DEFAULTS = {
 const MODELS = {
   groq: 'llama-3.3-70b-versatile',
   cfproxy: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
-  cf: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
   gemini: 'gemini-2.0-flash',
   openai: 'gpt-4o-mini',
 };
@@ -237,10 +232,9 @@ async function* sseStream(resp) {
 }
 
 async function sendMessage(text) {
-  const needKey = !['cfproxy'].includes(S.provider);
+  const needKey = S.provider !== 'cfproxy';
   if (needKey && !S.apiKey) { showError('Pehle Settings mein API key daalo (⚙ upar right). Proxy option ke liye Proxy Key chahiye.'); toggleSettings(true); return; }
   if (S.provider === 'cfproxy' && (!S.proxyUrl || !S.proxyKey)) { showError('Proxy provider ke liye Proxy URL + Proxy Key dono chahiye (Settings).'); toggleSettings(true); return; }
-  if (S.provider === 'cf' && !S.accountId) { showError('Direct Cloudflare provider ke liye Account ID bhi chahiye (Settings).'); toggleSettings(true); return; }
   history.push({ role: 'user', content: text });
   renderMsg('user', text);
   setStatus('thinking');
@@ -256,20 +250,11 @@ async function sendMessage(text) {
           contents: history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
         }),
       });
-    } else if (S.provider === 'cfproxy' || S.provider === 'cf') {
-      const url = S.provider === 'cfproxy'
-        ? `${S.proxyUrl.replace(/\/$/, '')}/chat`
-        : `https://api.cloudflare.com/client/v4/accounts/${S.accountId}/ai/run/${S.model}`;
-      resp = await fetch(url, {
+    } else if (S.provider === 'cfproxy') {
+      resp = await fetch(`${S.proxyUrl.replace(/\/$/, '')}/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: S.provider === 'cf' ? 'Bearer ' + S.apiKey : '',
-          'x-proxy-key': S.provider === 'cfproxy' ? S.proxyKey : '',
-        },
-        body: JSON.stringify(S.provider === 'cfproxy'
-          ? { model: S.model, messages: [{ role: 'system', content: S.systemPrompt }, ...history] }
-          : { stream: true, messages: [{ role: 'system', content: S.systemPrompt }, ...history] }),
+        headers: { 'Content-Type': 'application/json', 'x-proxy-key': S.proxyKey },
+        body: JSON.stringify({ model: S.model, messages: [{ role: 'system', content: S.systemPrompt }, ...history] }),
       });
     } else {
       const url = S.provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
@@ -283,11 +268,10 @@ async function sendMessage(text) {
     }
     if (!resp.ok) { const t = await resp.text(); throw new Error('API ' + resp.status + ': ' + t.slice(0, 200)); }
     for await (const chunk of sseStream(resp)) {
+      // Workers AI returns OpenAI-compatible chunks (choices[0].delta.content); legacy shape was chunk.response.
       const delta = S.provider === 'gemini'
         ? (chunk.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '')
-        : (S.provider === 'cf' || S.provider === 'cfproxy')
-          ? (chunk.response || '')
-          : (chunk.choices?.[0]?.delta?.content || '');
+        : (chunk.choices?.[0]?.delta?.content || chunk.response || '');
       if (delta) { full += delta; assistantEl.textContent = full; $('chat').scrollTop = $('chat').scrollHeight; }
     }
   } catch (e) {
@@ -338,14 +322,14 @@ function exportNotes() {
 function toggleSettings(open) {
   $('settings').classList.toggle('hidden', !open);
   if (open) {
-    $('provider').value = S.provider; $('apiKey').value = S.apiKey; $('accountId').value = S.accountId;
+    $('provider').value = S.provider; $('apiKey').value = S.apiKey;
     $('proxyUrl').value = S.proxyUrl; $('proxyKey').value = S.proxyKey; $('model').value = S.model;
     $('systemPrompt').value = S.systemPrompt; $('lang').value = S.lang; $('autoSpeak').value = S.autoSpeak;
   }
 }
 $('provider').onchange = () => { $('model').value = MODELS[$('provider').value]; };
 $('saveSettings').onclick = () => {
-  S = { provider: $('provider').value, apiKey: $('apiKey').value.trim(), accountId: $('accountId').value.trim(),
+  S = { provider: $('provider').value, apiKey: $('apiKey').value.trim(),
         proxyUrl: $('proxyUrl').value.trim(), proxyKey: $('proxyKey').value.trim(),
         model: $('model').value.trim(),
         systemPrompt: $('systemPrompt').value, lang: $('lang').value.trim() || 'en-IN', autoSpeak: $('autoSpeak').value };
