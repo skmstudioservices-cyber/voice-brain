@@ -2,57 +2,101 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Voice Brain — thinking partner</title>
 <style>
   :root {
     --bg: #050506; --panel: #0d0d10; --panel2: #131318;
-    --border: #232329; --text: #e8e8ea; --muted: #8a8a93;
+    --border: #232329; --text: #f0f0f2; --muted: #9a9aa3;
     --gold: #d9a53c; --gold-soft: rgba(217,165,60,.15);
   }
   * { box-sizing: border-box; margin: 0; }
-  body { background: var(--bg); color: var(--text); font: 15px/1.6 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
-  header { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--panel); }
-  header h1 { font-size: 16px; font-weight: 700; letter-spacing: .3px; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--text); font: 17px/1.6 'Segoe UI', system-ui, sans-serif; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--panel); flex-shrink: 0; }
+  header h1 { font-size: 19px; font-weight: 700; letter-spacing: .3px; }
   header h1 span { color: var(--gold); }
-  #status { font-size: 12px; color: var(--muted); border: 1px solid var(--border); padding: 3px 10px; border-radius: 20px; }
+  #status { font-size: 14px; color: var(--muted); border: 1px solid var(--border); padding: 4px 12px; border-radius: 22px; white-space: nowrap; }
   #status.listening { color: var(--gold); border-color: var(--gold); }
-  #status.busy { color: #e0b34d; }
+  #status.busy { color: #e0b34d; border-color: rgba(217,165,60,.5); }
   header .spacer { flex: 1; }
-  button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+  button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px; cursor: pointer; font-size: 16px; }
   button:hover { border-color: var(--gold); }
   button.gold { background: var(--gold); color: #141410; border-color: var(--gold); font-weight: 700; }
+
   main { flex: 1; display: flex; min-height: 0; }
   #chatPanel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-  .msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; }
+
+  /* ---------- Voice orb ---------- */
+  #orbZone { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 18px 12px 6px; }
+  #orbWrap { position: relative; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; }
+  .orb { width: 78px; height: 78px; border-radius: 50%; position: relative; z-index: 2;
+    background: radial-gradient(circle at 32% 30%, #ffe9b0, var(--gold) 48%, #6b4f17 100%);
+    box-shadow: 0 0 34px rgba(217,165,60,.4), inset 0 0 18px rgba(255,255,255,.25);
+    transition: transform .2s; }
+  .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(217,165,60,.55); opacity: 0; z-index: 1; }
+  #orbWrap.listening .orb { animation: orbPulse 1.3s ease-in-out infinite; }
+  #orbWrap.listening .ring { animation: ringOut 1.6s ease-out infinite; }
+  #orbWrap.listening .ring.r2 { animation-delay: .8s; }
+  #orbWrap.thinking .orb { animation: orbSpin 2.2s linear infinite; background: conic-gradient(from 0deg, #6b4f17, var(--gold), #6b4f17, var(--gold), #6b4f17); }
+  #orbWrap.thinking .orb::after { content: ''; position: absolute; inset: 8px; border-radius: 50%; background: radial-gradient(circle at 32% 30%, #ffe9b0, #b57f24 70%); }
+  #orbWrap.speaking .orb { animation: speakBob .45s ease-in-out infinite; }
+  @keyframes orbPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+  @keyframes speakBob { 0%,100% { transform: scale(1.02, .96); } 50% { transform: scale(.97, 1.08); } }
+  @keyframes orbSpin { to { transform: rotate(360deg); } }
+  @keyframes ringOut { 0% { transform: scale(.55); opacity: .9; } 100% { transform: scale(1.25); opacity: 0; } }
+  #orbLabel { margin-top: 10px; font-size: 15px; color: var(--muted); text-align: center; }
+
+  #chat { flex: 1; overflow-y: auto; padding: 12px 18px 8px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: min(78%, 640px); padding: 12px 16px; border-radius: 14px; white-space: pre-wrap; font-size: 17px; }
   .msg.user { align-self: flex-end; background: var(--gold-soft); border: 1px solid rgba(217,165,60,.35); }
   .msg.assistant { align-self: flex-start; background: var(--panel2); border: 1px solid var(--border); }
-  .msg.note-saved::after { content: '📌 saved'; display: block; margin-top: 6px; font-size: 11px; color: var(--gold); }
-  #interim { min-height: 24px; padding: 0 20px 6px; color: var(--muted); font-style: italic; font-size: 13px; }
-  .controls { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--panel); }
-  #micBtn { flex: 1; padding: 16px; border-radius: 14px; font-size: 16px; }
-  #micBtn.on { background: #b3392f; border-color: #b3392f; color: #fff; animation: pulse 1.2s infinite; }
-  @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(179,57,47,.25); } }
-  aside { width: 300px; border-left: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; }
-  aside h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 14px 16px 8px; }
-  #notesList { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
-  .note { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
-  .note .t { color: var(--gold); font-size: 11px; margin-bottom: 4px; }
-  .note .x { float: right; color: var(--muted); cursor: pointer; }
+  .msg.note-saved::after { content: '📌 auto-noted'; display: block; margin-top: 8px; font-size: 12px; color: var(--gold); }
+  #interim { min-height: 26px; padding: 0 18px 4px; color: var(--muted); font-style: italic; font-size: 16px; }
+  #error { color: #e07a6a; font-size: 15px; padding: 0 18px 8px; min-height: 20px; }
+
+  .controls { flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--panel); }
+  .rowTop { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .seg { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .seg button { border: none; border-radius: 0; padding: 8px 14px; font-size: 15px; background: var(--panel2); }
+  .seg button.on { background: var(--gold); color: #141410; font-weight: 700; }
+  .rowTop .grow { flex: 1; }
+  #micBtn { width: 100%; padding: 18px; border-radius: 16px; font-size: 19px; }
+  #micBtn.on { background: #b3392f; border-color: #b3392f; color: #fff; }
+
+  /* ---------- Notes ---------- */
+  #notesBackdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 8; display: none; }
+  #notesBackdrop.open { display: block; }
+  aside { width: min(380px, 92vw); border-left: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; flex-shrink: 0; }
+  aside h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 16px 16px 8px; display: flex; justify-content: space-between; align-items: center; }
+  #notesList { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 10px; }
+  .note { background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 16px; }
+  .note .t { color: var(--gold); font-size: 13px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .note .acts { margin-left: auto; display: flex; gap: 8px; }
+  .note .acts span { cursor: pointer; user-select: none; }
+  .note .b { white-space: pre-wrap; }
+  .note textarea { width: 100%; min-height: 100px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; font: inherit; }
+  .note .editrow { margin-top: 8px; display: flex; gap: 8px; }
+  .note .editrow button { padding: 6px 12px; font-size: 14px; }
   aside .actions { padding: 12px; display: flex; gap: 8px; border-top: 1px solid var(--border); }
-  aside .actions button { flex: 1; font-size: 13px; padding: 7px; }
+  aside .actions button { flex: 1; font-size: 15px; padding: 9px; }
+
   .modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 10; }
   .modal.hidden { display: none; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; width: min(520px, 92vw); max-height: 88vh; overflow-y: auto; }
-  .card h2 { font-size: 15px; margin-bottom: 14px; color: var(--gold); }
-  label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
-  select, input, textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px; font: inherit; }
-  textarea { min-height: 90px; resize: vertical; }
-  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .row { display: flex; gap: 10px; }
-  .card .actions { margin-top: 18px; display: flex; gap: 10px; justify-content: flex-end; }
-  #error { color: #e07a6a; font-size: 12px; padding: 0 20px 8px; min-height: 16px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: min(560px, 94vw); max-height: 88dvh; overflow-y: auto; }
+  .card h2 { font-size: 18px; margin-bottom: 14px; color: var(--gold); }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 14px 0 5px; }
+  select, input, textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 11px; font: inherit; font-size: 16px; }
+  textarea { min-height: 100px; resize: vertical; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 5px; }
+  .srow { display: flex; gap: 10px; }
+  .card .actions { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* Mobile: notes drawer */
+  @media (max-width: 899px) {
+    aside { position: fixed; top: 0; right: 0; bottom: 0; z-index: 9; transform: translateX(105%); transition: transform .25s; box-shadow: -12px 0 40px rgba(0,0,0,.5); }
+    aside.open { transform: translateX(0); }
+  }
 </style>
 </head>
 <body>
@@ -60,61 +104,86 @@
   <h1>⚡ Voice <span>Brain</span></h1>
   <div id="status">idle</div>
   <div class="spacer"></div>
+  <button id="notesBtn" title="Notes">📝</button>
   <button id="settingsBtn">⚙ Settings</button>
 </header>
 <main>
   <section id="chatPanel">
+    <div id="orbZone">
+      <div id="orbWrap">
+        <div class="ring"></div><div class="ring r2"></div>
+        <div class="orb"></div>
+      </div>
+      <div id="orbLabel">Tap mic (or press Space) — main tumhara thinking partner hoon</div>
+    </div>
     <div id="chat"></div>
     <div id="interim"></div>
     <div id="error"></div>
     <div class="controls">
-      <button id="micBtn" class="gold">🎙 Talk <small>(Space)</small></button>
-      <button id="stopBtn" title="Stop speaking">🔇</button>
-      <button id="noteBtn" title="Save last exchange as note">📌 Save</button>
-      <button id="clearBtn" title="Clear conversation">🗑</button>
+      <div class="rowTop">
+        <div class="seg">
+          <button id="modeOneway" title="Bolo, jawab sirf text mein">⌨ One-way</button>
+          <button id="modeTwoway" title="Bolo, jawab bolke bhi milega">🗣 Two-way</button>
+        </div>
+        <div class="grow"></div>
+        <button id="stopBtn" title="Stop speaking">🔇</button>
+        <button id="clearBtn" title="Clear conversation">🗑</button>
+      </div>
+      <button id="micBtn" class="gold">🎙 Tap & Talk <small>(Space)</small></button>
     </div>
   </section>
-  <aside>
-    <h2>Notes</h2>
+  <aside id="notesPanel">
+    <h2>Notes <span style="font-size:12px; text-transform:none">(auto-saved)</span></h2>
     <div id="notesList"></div>
     <div class="actions">
+      <button id="cleanAllBtn" title="Sab notes LLM se clean karo">✨ Clean all</button>
       <button id="exportBtn">⬇ Export .md</button>
     </div>
   </aside>
 </main>
+<div id="notesBackdrop"></div>
 
 <div id="settings" class="modal hidden">
   <div class="card">
     <h2>Settings</h2>
     <label>LLM Provider</label>
     <select id="provider">
-      <option value="groq">Groq (free, fastest)</option>
       <option value="cfproxy">Cloudflare Workers AI — via proxy (recommended)</option>
+      <option value="groq">Groq (free, fastest)</option>
       <option value="gemini">Google Gemini (free tier)</option>
       <option value="openai">OpenAI</option>
     </select>
-    <div class="hint">Proxy wale option mein CF token browser mein nahi jaata — sirf proxy URL + key.</div>
-    <label>Proxy URL <small>(cfproxy provider)</small></label>
+    <label>Proxy URL <small>(cfproxy)</small></label>
     <input id="proxyUrl" placeholder="https://voice-brain-proxy.india-in.workers.dev">
-    <label>Proxy Key <small>(cfproxy provider)</small></label>
+    <label>Proxy Key <small>(cfproxy)</small></label>
     <input id="proxyKey" type="password" placeholder="x-proxy-key value">
-    <label>API Key <small>(stays in this browser only)</small></label>
+    <label>API Key <small>(doosre providers, is browser mein hi rehti hai)</small></label>
     <input id="apiKey" type="password" placeholder="paste key (not needed for proxy)">
     <label>Model</label>
     <input id="model" placeholder="llama-3.3-70b-versatile">
     <div class="hint">CF quick: @cf/meta/llama-3.1-8b-instruct-fp8-fast · CF full: @cf/meta/llama-3.3-70b-instruct-fp8-fast</div>
-    <label>System prompt</label>
-    <textarea id="systemPrompt"></textarea>
-    <div class="row">
+    <div class="srow">
       <div style="flex:1">
         <label>Speech language</label>
         <input id="lang" placeholder="en-IN">
       </div>
       <div style="flex:1">
-        <label>Speak replies</label>
-        <select id="autoSpeak"><option value="1">Yes</option><option value="0">No</option></select>
+        <label>Conversation mode</label>
+        <select id="modeSel"><option value="oneway">One-way (text replies)</option><option value="twoway">Two-way (spoken replies)</option></select>
       </div>
     </div>
+    <div class="srow">
+      <div style="flex:1">
+        <label>Auto-save notes</label>
+        <select id="autoNotes"><option value="1">Yes (recommended)</option><option value="0">No</option></select>
+      </div>
+      <div style="flex:1">
+        <label>Auto-clean notes (extra LLM call)</label>
+        <select id="autoClean"><option value="0">No (manual ✨ button)</option><option value="1">Yes</option></select>
+      </div>
+    </div>
+    <label>System prompt</label>
+    <textarea id="systemPrompt"></textarea>
     <div class="actions">
       <button id="closeSettings">Cancel</button>
       <button id="saveSettings" class="gold">Save</button>
@@ -124,28 +193,40 @@
 
 <script>
 const DEFAULTS = {
-  provider: 'groq',
+  provider: 'cfproxy',
   apiKey: '',
   proxyUrl: 'https://voice-brain-proxy.india-in.workers.dev',
   proxyKey: '',
-  model: 'llama-3.3-70b-versatile',
+  model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+  mode: 'twoway',
+  autoNotes: '1',
+  autoClean: '0',
   systemPrompt: 'You are my personal thinking partner for brain dumps and brainstorming. Keep replies SHORT and conversational (2-5 sentences) unless I ask for depth. Ask sharp follow-up questions. Hinglish is fine. When I dump raw thoughts, structure them into crisp bullet points. Never pad or flatter.',
   lang: 'en-IN',
-  autoSpeak: '1',
 };
 const MODELS = {
-  groq: 'llama-3.3-70b-versatile',
   cfproxy: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+  groq: 'llama-3.3-70b-versatile',
   gemini: 'gemini-2.0-flash',
   openai: 'gpt-4o-mini',
 };
 let S = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('vb.settings') || '{}') };
-let history = JSON.parse(localStorage.getItem('vb.history') || '[]'); // [{role, content}]
+let history = JSON.parse(localStorage.getItem('vb.history') || '[]');
 let notes = JSON.parse(localStorage.getItem('vb.notes') || '[]');
 
 const $ = (id) => document.getElementById(id);
-const setStatus = (t) => { $('status').textContent = t; $('status').className = t === 'listening' ? 'listening' : (t === 'thinking' || t === 'speaking') ? 'busy' : '';
-  $('micBtn').classList.toggle('on', t === 'listening'); };
+function setStatus(t) {
+  $('status').textContent = t;
+  $('status').className = (t === 'listening') ? 'listening' : ((t === 'thinking' || t === 'speaking') ? 'busy' : '');
+  $('micBtn').classList.toggle('on', t === 'listening');
+  const w = $('orbWrap');
+  w.className = '';
+  if (t === 'listening' || t === 'thinking' || t === 'speaking') w.classList.add(t);
+  const labels = { idle: 'Tap mic (or press Space) — main tumhara thinking partner hoon',
+    listening: '🎤 Sun raha hoon... bolo', thinking: '💭 Soch raha hoon...',
+    speaking: '🔊 Bol raha hoon...', ready: 'Ready — bolo!', 'no key': 'Pehle Settings (⚙) kholo' };
+  $('orbLabel').textContent = labels[t] || t;
+}
 
 function renderMsg(role, text, isNote) {
   const d = document.createElement('div');
@@ -158,7 +239,7 @@ function renderMsg(role, text, isNote) {
 function renderHistory() {
   $('chat').innerHTML = '';
   history.forEach(m => renderMsg(m.role, m.content));
-  if (!history.length) renderMsg('assistant', 'Mic dabao (ya Space) aur bolna shuru karo — main tumhara thinking partner hoon. 📌 Save se koi bhi exchange note ban jayega, Notes panel se export karo.');
+  if (!history.length) renderMsg('assistant', 'Mic dabao (ya Space) aur bolna shuru karo. Har exchange apne aap Notes mein save hota hai — wahan ✨ Clean se umm/amm/fluff hata ke crisp note bana sakte ho, ✏️ se edit bhi.');
 }
 
 /* ---------- STT ---------- */
@@ -181,11 +262,11 @@ if (SR) {
     if (finalText.trim()) sendMessage(finalText.trim());
     else setStatus('idle');
   };
-  rec.onerror = (e) => { listening = false; setStatus('idle'); $('interim').textContent = ''; if (e.error !== 'no-speech') showError('Mic error: ' + e.error); };
+  rec.onerror = (e) => { listening = false; setStatus('idle'); $('interim').textContent = ''; if (e.error !== 'no-speech') showError('Mic error: ' + e.error + ' (Chrome/Edge try karo)'); };
 }
 function toggleMic() {
   if (listening) { rec.stop(); return; }
-  if (!rec) { showError('Speech recognition not supported — use Chrome or Edge.'); return; }
+  if (!rec) { showError('Speech recognition is browser mein nahi hai — Chrome ya Edge use karo.'); return; }
   speechSynthesis.cancel();
   finalText = ''; listening = true; setStatus('listening');
   try { rec.start(); } catch (e) { listening = false; setStatus('idle'); }
@@ -199,7 +280,7 @@ function pickVoice() {
 }
 speechSynthesis.onvoiceschanged = pickVoice; pickVoice();
 function speak(text) {
-  if (S.autoSpeak !== '1' || !text) return;
+  if (S.mode !== 'twoway' || !text) return;
   const u = new SpeechSynthesisUtterance(text.replace(/[*_#>`]/g, ''));
   if (voice) u.voice = voice;
   u.lang = S.lang;
@@ -209,7 +290,7 @@ function speak(text) {
 }
 
 /* ---------- LLM ---------- */
-function showError(t) { $('error').textContent = t || ''; setTimeout(() => { if ($('error').textContent === t) $('error').textContent = ''; }, 6000); }
+function showError(t) { $('error').textContent = t || ''; setTimeout(() => { if ($('error').textContent === t) $('error').textContent = ''; }, 7000); }
 
 async function* sseStream(resp) {
   const reader = resp.body.getReader();
@@ -231,86 +312,151 @@ async function* sseStream(resp) {
   }
 }
 
+// Build the provider-appropriate fetch for a full message list; returns Response.
+async function llmFetch(messages) {
+  if (S.provider === 'gemini') {
+    return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${S.model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(S.apiKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: messages[0].content }] },
+        contents: messages.slice(1).map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+      }),
+    });
+  }
+  if (S.provider === 'cfproxy') {
+    return fetch(`${S.proxyUrl.replace(/\/$/, '')}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-proxy-key': S.proxyKey },
+      body: JSON.stringify({ model: S.model, messages }),
+    });
+  }
+  const url = S.provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+  return fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.apiKey },
+    body: JSON.stringify({ model: S.model, stream: true, messages }),
+  });
+}
+
+function credsReady() {
+  if (S.provider === 'cfproxy') return !!(S.proxyUrl && S.proxyKey);
+  return !!S.apiKey;
+}
+
+// Ask the LLM with a full message list; streams, calls onDelta per chunk, returns full text.
+async function askLLM(messages, onDelta) {
+  const resp = await llmFetch(messages);
+  if (!resp.ok) {
+    const t = await resp.text();
+    if (resp.status === 401 && S.provider === 'cfproxy') throw new Error('Proxy key galat ya missing — ⚙ Settings mein Proxy Key dobara paste karo.');
+    throw new Error('API ' + resp.status + ': ' + t.slice(0, 200));
+  }
+  let full = '';
+  for await (const chunk of sseStream(resp)) {
+    const delta = S.provider === 'gemini'
+      ? (chunk.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '')
+      : (chunk.choices?.[0]?.delta?.content || chunk.response || '');
+    if (delta) { full += delta; onDelta && onDelta(delta); }
+  }
+  return full;
+}
+
 async function sendMessage(text) {
-  const needKey = S.provider !== 'cfproxy';
-  if (needKey && !S.apiKey) { showError('Pehle Settings mein API key daalo (⚙ upar right). Proxy option ke liye Proxy Key chahiye.'); toggleSettings(true); return; }
-  if (S.provider === 'cfproxy' && (!S.proxyUrl || !S.proxyKey)) { showError('Proxy provider ke liye Proxy URL + Proxy Key dono chahiye (Settings).'); toggleSettings(true); return; }
+  if (!credsReady()) {
+    showError(S.provider === 'cfproxy' ? 'Proxy Key daalo — ⚙ Settings (Proxy URL + Proxy Key).' : 'Pehle Settings (⚙) mein API key daalo.');
+    toggleSettings(true);
+    return;
+  }
   history.push({ role: 'user', content: text });
   renderMsg('user', text);
   setStatus('thinking');
   const assistantEl = renderMsg('assistant', '');
   let full = '';
   try {
-    let resp;
-    if (S.provider === 'gemini') {
-      resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${S.model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(S.apiKey)}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: S.systemPrompt }] },
-          contents: history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-        }),
-      });
-    } else if (S.provider === 'cfproxy') {
-      resp = await fetch(`${S.proxyUrl.replace(/\/$/, '')}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-proxy-key': S.proxyKey },
-        body: JSON.stringify({ model: S.model, messages: [{ role: 'system', content: S.systemPrompt }, ...history] }),
-      });
-    } else {
-      const url = S.provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-      resp = await fetch(url, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.apiKey },
-        body: JSON.stringify({
-          model: S.model, stream: true,
-          messages: [{ role: 'system', content: S.systemPrompt }, ...history],
-        }),
-      });
-    }
-    if (!resp.ok) { const t = await resp.text(); throw new Error('API ' + resp.status + ': ' + t.slice(0, 200)); }
-    for await (const chunk of sseStream(resp)) {
-      // Workers AI returns OpenAI-compatible chunks (choices[0].delta.content); legacy shape was chunk.response.
-      const delta = S.provider === 'gemini'
-        ? (chunk.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '')
-        : (chunk.choices?.[0]?.delta?.content || chunk.response || '');
-      if (delta) { full += delta; assistantEl.textContent = full; $('chat').scrollTop = $('chat').scrollHeight; }
-    }
+    full = await askLLM([{ role: 'system', content: S.systemPrompt }, ...history],
+      (d) => { assistantEl.textContent += d; $('chat').scrollTop = $('chat').scrollHeight; });
   } catch (e) {
     showError(String(e.message || e));
-    if (!full) assistantEl.textContent = '⚠ ' + (e.message || e);
+    assistantEl.textContent = '⚠ ' + (e.message || e);
+    full = '';
   }
   if (full) {
     history.push({ role: 'assistant', content: full });
     localStorage.setItem('vb.history', JSON.stringify(history.slice(-40)));
     setStatus('idle');
     speak(full);
+    if (S.autoNotes === '1') addNote(text, full);
   }
 }
 
-/* ---------- Notes ---------- */
+/* ---------- Notes (Wispr-style) ---------- */
+const CLEAN_PROMPT = 'You clean up voice notes. Rewrite the note: remove ALL filler words (umm, amm, hmm, matlab, yaar, haan, so, like), remove repetition and small talk, fix grammar, keep the Hinglish/language mix as-is, keep EVERY real point and name/number, format as crisp bullets if it is a list of ideas (else short paragraph). Reply with ONLY the cleaned note text — no preamble.';
+
+function addNote(userText, aiText) {
+  const title = (userText || '').trim().slice(0, 60) || 'note';
+  notes.push({ ts: Date.now(), title, text: `ME: ${userText}\n\nAI: ${aiText}` });
+  localStorage.setItem('vb.notes', JSON.stringify(notes));
+  renderNotes();
+  const msgs = document.querySelectorAll('.msg.assistant');
+  msgs[msgs.length - 1]?.classList.add('note-saved');
+  if (S.autoClean === '1') cleanNote(notes[notes.length - 1].ts);
+}
+
 function renderNotes() {
   $('notesList').innerHTML = '';
   notes.slice().reverse().forEach((n) => {
     const d = document.createElement('div');
     d.className = 'note';
-    const t = document.createElement('div'); t.className = 't'; t.textContent = new Date(n.ts).toLocaleString('en-IN');
-    const x = document.createElement('span'); x.className = 'x'; x.textContent = '✕';
-    x.onclick = () => { notes = notes.filter(m => m.ts !== n.ts); localStorage.setItem('vb.notes', JSON.stringify(notes)); renderNotes(); };
-    t.prepend(x);
-    const b = document.createElement('div'); b.textContent = n.text;
+    const t = document.createElement('div'); t.className = 't';
+    t.textContent = `📌 ${n.title} · ${new Date(n.ts).toLocaleString('en-IN')}`;
+    const acts = document.createElement('span'); acts.className = 'acts';
+    const mk = (lbl, title, fn) => { const s = document.createElement('span'); s.textContent = lbl; s.title = title; s.onclick = fn; return s; };
+    acts.append(
+      mk('✏️', 'Edit', () => editNote(n.ts)),
+      mk('✨', 'Clean with AI', () => cleanNote(n.ts)),
+      mk('✕', 'Delete', () => { notes = notes.filter(m => m.ts !== n.ts); localStorage.setItem('vb.notes', JSON.stringify(notes)); renderNotes(); })
+    );
+    t.appendChild(acts);
+    const b = document.createElement('div'); b.className = 'b'; b.textContent = n.text;
     d.append(t, b);
     $('notesList').appendChild(d);
   });
 }
-function saveNote() {
-  if (history.length < 2) return showError('Abhi kuch save karne layak nahi hai.');
-  const u = history[history.length - 2], a = history[history.length - 1];
-  notes.push({ ts: Date.now(), text: `ME: ${u.content}\n\nAI: ${a.content}` });
-  localStorage.setItem('vb.notes', JSON.stringify(notes));
+
+function editNote(ts) {
+  const n = notes.find(m => m.ts === ts); if (!n) return;
   renderNotes();
-  const msgs = document.querySelectorAll('.msg.assistant'); msgs[msgs.length - 1]?.classList.add('note-saved');
+  const card = [...document.querySelectorAll('.note')].find(el => el.querySelector('.t')?.textContent.includes(new Date(n.ts).toLocaleString('en-IN')));
+  if (!card) return;
+  const b = card.querySelector('.b');
+  b.innerHTML = '';
+  const ta = document.createElement('textarea'); ta.value = n.text; b.appendChild(ta);
+  const row = document.createElement('div'); row.className = 'editrow';
+  const save = document.createElement('button'); save.textContent = 'Save'; save.className = 'gold';
+  const cancel = document.createElement('button'); cancel.textContent = 'Cancel';
+  save.onclick = () => { n.text = ta.value; localStorage.setItem('vb.notes', JSON.stringify(notes)); renderNotes(); };
+  cancel.onclick = renderNotes;
+  row.append(save, cancel); b.appendChild(row);
 }
+
+async function cleanNote(ts) {
+  const n = notes.find(m => m.ts === ts); if (!n) return;
+  if (!credsReady()) { showError('Clean ke liye provider setup chahiye (Settings).'); toggleSettings(true); return; }
+  const card = [...document.querySelectorAll('.note')].find(el => el.querySelector('.t')?.textContent.includes(new Date(n.ts).toLocaleString('en-IN')));
+  if (card) card.querySelector('.b').textContent = '✨ cleaning...';
+  try {
+    const out = await askLLM([{ role: 'system', content: CLEAN_PROMPT }, { role: 'user', content: n.text }]);
+    if (out) { n.text = out.trim(); localStorage.setItem('vb.notes', JSON.stringify(notes)); }
+  } catch (e) { showError('Clean fail: ' + (e.message || e)); }
+  renderNotes();
+}
+
+async function cleanAll() {
+  if (!notes.length) return;
+  for (const n of notes) await cleanNote(n.ts);
+}
+
 function exportNotes() {
-  const md = '# Voice Brain — Notes\n\n' + notes.map(n => `## ${new Date(n.ts).toLocaleString('en-IN')}\n\n${n.text}\n`).join('\n---\n\n');
+  const md = '# Voice Brain — Notes\n\n' + notes.map(n => `## ${n.title} (${new Date(n.ts).toLocaleString('en-IN')})\n\n${n.text}\n`).join('\n---\n\n');
   const blob = new Blob([md || '# no notes yet'], { type: 'text/markdown' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -318,41 +464,58 @@ function exportNotes() {
   a.click();
 }
 
-/* ---------- Settings UI ---------- */
+/* ---------- Mode + Settings UI ---------- */
+function setMode(m) {
+  S.mode = m;
+  $('modeOneway').classList.toggle('on', m === 'oneway');
+  $('modeTwoway').classList.toggle('on', m === 'twoway');
+  if (m === 'oneway') speechSynthesis.cancel();
+  localStorage.setItem('vb.settings', JSON.stringify(S));
+}
 function toggleSettings(open) {
   $('settings').classList.toggle('hidden', !open);
   if (open) {
     $('provider').value = S.provider; $('apiKey').value = S.apiKey;
     $('proxyUrl').value = S.proxyUrl; $('proxyKey').value = S.proxyKey; $('model').value = S.model;
-    $('systemPrompt').value = S.systemPrompt; $('lang').value = S.lang; $('autoSpeak').value = S.autoSpeak;
+    $('systemPrompt').value = S.systemPrompt; $('lang').value = S.lang;
+    $('modeSel').value = S.mode; $('autoNotes').value = S.autoNotes; $('autoClean').value = S.autoClean;
   }
 }
 $('provider').onchange = () => { $('model').value = MODELS[$('provider').value]; };
 $('saveSettings').onclick = () => {
-  S = { provider: $('provider').value, apiKey: $('apiKey').value.trim(),
-        proxyUrl: $('proxyUrl').value.trim(), proxyKey: $('proxyKey').value.trim(),
-        model: $('model').value.trim(),
-        systemPrompt: $('systemPrompt').value, lang: $('lang').value.trim() || 'en-IN', autoSpeak: $('autoSpeak').value };
+  S = { ...S,
+    provider: $('provider').value, apiKey: $('apiKey').value.trim(),
+    proxyUrl: $('proxyUrl').value.trim(), proxyKey: $('proxyKey').value.trim(),
+    model: $('model').value.trim(),
+    systemPrompt: $('systemPrompt').value, lang: $('lang').value.trim() || 'en-IN',
+    mode: $('modeSel').value, autoNotes: $('autoNotes').value, autoClean: $('autoClean').value };
   if (rec) rec.lang = S.lang;
+  setMode(S.mode);
   localStorage.setItem('vb.settings', JSON.stringify(S));
   toggleSettings(false);
+  setStatus(credsReady() ? 'ready' : 'no key');
 };
 $('closeSettings').onclick = () => toggleSettings(false);
 $('settings').onclick = (e) => { if (e.target === $('settings')) toggleSettings(false); };
 
 /* ---------- Wire up ---------- */
 $('micBtn').onclick = toggleMic;
+$('modeOneway').onclick = () => setMode('oneway');
+$('modeTwoway').onclick = () => setMode('twoway');
 $('stopBtn').onclick = () => { speechSynthesis.cancel(); setStatus('idle'); };
-$('noteBtn').onclick = saveNote;
 $('exportBtn').onclick = exportNotes;
+$('cleanAllBtn').onclick = cleanAll;
 $('clearBtn').onclick = () => { history = []; localStorage.removeItem('vb.history'); renderHistory(); };
+$('notesBtn').onclick = () => { $('notesPanel').classList.add('open'); $('notesBackdrop').classList.add('open'); };
+$('notesBackdrop').onclick = () => { $('notesPanel').classList.remove('open'); $('notesBackdrop').classList.remove('open'); };
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); toggleMic(); }
-  if (e.key === 'Escape') toggleSettings(false);
+  if (e.key === 'Escape') { toggleSettings(false); $('notesPanel').classList.remove('open'); $('notesBackdrop').classList.remove('open'); }
 });
 renderHistory();
 renderNotes();
-setStatus((S.provider === 'cfproxy' && S.proxyKey) || S.apiKey ? 'ready' : 'no key');
+setMode(S.mode || 'twoway');
+setStatus(credsReady() ? 'ready' : 'no key');
 </script>
 </body>
 </html>
