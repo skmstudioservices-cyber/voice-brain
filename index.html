@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice Brain — thinking partner</title>
+<style>
+  :root {
+    --bg: #050506; --panel: #0d0d10; --panel2: #131318;
+    --border: #232329; --text: #e8e8ea; --muted: #8a8a93;
+    --gold: #d9a53c; --gold-soft: rgba(217,165,60,.15);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 15px/1.6 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  header h1 { font-size: 16px; font-weight: 700; letter-spacing: .3px; }
+  header h1 span { color: var(--gold); }
+  #status { font-size: 12px; color: var(--muted); border: 1px solid var(--border); padding: 3px 10px; border-radius: 20px; }
+  #status.listening { color: var(--gold); border-color: var(--gold); }
+  #status.busy { color: #e0b34d; }
+  header .spacer { flex: 1; }
+  button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+  button:hover { border-color: var(--gold); }
+  button.gold { background: var(--gold); color: #141410; border-color: var(--gold); font-weight: 700; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #chatPanel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--gold-soft); border: 1px solid rgba(217,165,60,.35); }
+  .msg.assistant { align-self: flex-start; background: var(--panel2); border: 1px solid var(--border); }
+  .msg.note-saved::after { content: '📌 saved'; display: block; margin-top: 6px; font-size: 11px; color: var(--gold); }
+  #interim { min-height: 24px; padding: 0 20px 6px; color: var(--muted); font-style: italic; font-size: 13px; }
+  .controls { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--panel); }
+  #micBtn { flex: 1; padding: 16px; border-radius: 14px; font-size: 16px; }
+  #micBtn.on { background: #b3392f; border-color: #b3392f; color: #fff; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(179,57,47,.25); } }
+  aside { width: 300px; border-left: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; }
+  aside h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 14px 16px 8px; }
+  #notesList { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
+  .note { background: var(--panel2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .note .t { color: var(--gold); font-size: 11px; margin-bottom: 4px; }
+  .note .x { float: right; color: var(--muted); cursor: pointer; }
+  aside .actions { padding: 12px; display: flex; gap: 8px; border-top: 1px solid var(--border); }
+  aside .actions button { flex: 1; font-size: 13px; padding: 7px; }
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; z-index: 10; }
+  .modal.hidden { display: none; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px; width: min(520px, 92vw); max-height: 88vh; overflow-y: auto; }
+  .card h2 { font-size: 15px; margin-bottom: 14px; color: var(--gold); }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+  select, input, textarea { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 9px; font: inherit; }
+  textarea { min-height: 90px; resize: vertical; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .row { display: flex; gap: 10px; }
+  .card .actions { margin-top: 18px; display: flex; gap: 10px; justify-content: flex-end; }
+  #error { color: #e07a6a; font-size: 12px; padding: 0 20px 8px; min-height: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ Voice <span>Brain</span></h1>
+  <div id="status">idle</div>
+  <div class="spacer"></div>
+  <button id="settingsBtn">⚙ Settings</button>
+</header>
+<main>
+  <section id="chatPanel">
+    <div id="chat"></div>
+    <div id="interim"></div>
+    <div id="error"></div>
+    <div class="controls">
+      <button id="micBtn" class="gold">🎙 Talk <small>(Space)</small></button>
+      <button id="stopBtn" title="Stop speaking">🔇</button>
+      <button id="noteBtn" title="Save last exchange as note">📌 Save</button>
+      <button id="clearBtn" title="Clear conversation">🗑</button>
+    </div>
+  </section>
+  <aside>
+    <h2>Notes</h2>
+    <div id="notesList"></div>
+    <div class="actions">
+      <button id="exportBtn">⬇ Export .md</button>
+    </div>
+  </aside>
+</main>
+
+<div id="settings" class="modal hidden">
+  <div class="card">
+    <h2>Settings</h2>
+    <label>LLM Provider</label>
+    <select id="provider">
+      <option value="groq">Groq (free, fastest)</option>
+      <option value="gemini">Google Gemini (free tier)</option>
+      <option value="openai">OpenAI</option>
+    </select>
+    <div class="hint">Groq key: console.groq.com (free) · Gemini key: aistudio.google.com (free)</div>
+    <label>API Key <small>(stays in this browser only)</small></label>
+    <input id="apiKey" type="password" placeholder="paste key">
+    <label>Model</label>
+    <input id="model" placeholder="llama-3.3-70b-versatile">
+    <label>System prompt</label>
+    <textarea id="systemPrompt"></textarea>
+    <div class="row">
+      <div style="flex:1">
+        <label>Speech language</label>
+        <input id="lang" placeholder="en-IN">
+      </div>
+      <div style="flex:1">
+        <label>Speak replies</label>
+        <select id="autoSpeak"><option value="1">Yes</option><option value="0">No</option></select>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="closeSettings">Cancel</button>
+      <button id="saveSettings" class="gold">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULTS = {
+  provider: 'groq',
+  apiKey: '',
+  model: 'llama-3.3-70b-versatile',
+  systemPrompt: 'You are my personal thinking partner for brain dumps and brainstorming. Keep replies SHORT and conversational (2-5 sentences) unless I ask for depth. Ask sharp follow-up questions. Hinglish is fine. When I dump raw thoughts, structure them into crisp bullet points. Never pad or flatter.',
+  lang: 'en-IN',
+  autoSpeak: '1',
+};
+const MODELS = { groq: 'llama-3.3-70b-versatile', gemini: 'gemini-2.0-flash', openai: 'gpt-4o-mini' };
+let S = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('vb.settings') || '{}') };
+let history = JSON.parse(localStorage.getItem('vb.history') || '[]'); // [{role, content}]
+let notes = JSON.parse(localStorage.getItem('vb.notes') || '[]');
+
+const $ = (id) => document.getElementById(id);
+const setStatus = (t) => { $('status').textContent = t; $('status').className = t === 'listening' ? 'listening' : (t === 'thinking' || t === 'speaking') ? 'busy' : '';
+  $('micBtn').classList.toggle('on', t === 'listening'); };
+
+function renderMsg(role, text, isNote) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + role + (isNote ? ' note-saved' : '');
+  d.textContent = text;
+  $('chat').appendChild(d);
+  $('chat').scrollTop = $('chat').scrollHeight;
+  return d;
+}
+function renderHistory() {
+  $('chat').innerHTML = '';
+  history.forEach(m => renderMsg(m.role, m.content));
+  if (!history.length) renderMsg('assistant', 'Mic dabao (ya Space) aur bolna shuru karo — main tumhara thinking partner hoon. 📌 Save se koi bhi exchange note ban jayega, Notes panel se export karo.');
+}
+
+/* ---------- STT ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, finalText = '', listening = false;
+if (SR) {
+  rec = new SR();
+  rec.lang = S.lang; rec.interimResults = true; rec.continuous = false;
+  rec.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    $('interim').textContent = interim;
+  };
+  rec.onend = () => {
+    listening = false;
+    $('interim').textContent = '';
+    if (finalText.trim()) sendMessage(finalText.trim());
+    else setStatus('idle');
+  };
+  rec.onerror = (e) => { listening = false; setStatus('idle'); $('interim').textContent = ''; if (e.error !== 'no-speech') showError('Mic error: ' + e.error); };
+}
+function toggleMic() {
+  if (listening) { rec.stop(); return; }
+  if (!rec) { showError('Speech recognition not supported — use Chrome or Edge.'); return; }
+  speechSynthesis.cancel();
+  finalText = ''; listening = true; setStatus('listening');
+  try { rec.start(); } catch (e) { listening = false; setStatus('idle'); }
+}
+
+/* ---------- TTS ---------- */
+let voice = null;
+function pickVoice() {
+  const vs = speechSynthesis.getVoices();
+  voice = vs.find(v => /en-IN|en-GB/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || vs[0];
+}
+speechSynthesis.onvoiceschanged = pickVoice; pickVoice();
+function speak(text) {
+  if (S.autoSpeak !== '1' || !text) return;
+  const u = new SpeechSynthesisUtterance(text.replace(/[*_#>`]/g, ''));
+  if (voice) u.voice = voice;
+  u.lang = S.lang;
+  u.onstart = () => setStatus('speaking');
+  u.onend = () => setStatus('idle');
+  speechSynthesis.speak(u);
+}
+
+/* ---------- LLM ---------- */
+function showError(t) { $('error').textContent = t || ''; setTimeout(() => { if ($('error').textContent === t) $('error').textContent = ''; }, 6000); }
+
+async function* sseStream(resp) {
+  const reader = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      const t = line.trim();
+      if (!t.startsWith('data:')) continue;
+      const payload = t.slice(5).trim();
+      if (payload === '[DONE]') return;
+      try { yield JSON.parse(payload); } catch (e) { /* skip partial */ }
+    }
+  }
+}
+
+async function sendMessage(text) {
+  if (!S.apiKey) { showError('Pehle Settings mein API key daalo (⚙ upar right).'); toggleSettings(true); return; }
+  history.push({ role: 'user', content: text });
+  renderMsg('user', text);
+  setStatus('thinking');
+  const assistantEl = renderMsg('assistant', '');
+  let full = '';
+  try {
+    let resp;
+    if (S.provider === 'gemini') {
+      resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${S.model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(S.apiKey)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: S.systemPrompt }] },
+          contents: history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+        }),
+      });
+    } else {
+      const url = S.provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+      resp = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.apiKey },
+        body: JSON.stringify({
+          model: S.model, stream: true,
+          messages: [{ role: 'system', content: S.systemPrompt }, ...history],
+        }),
+      });
+    }
+    if (!resp.ok) { const t = await resp.text(); throw new Error('API ' + resp.status + ': ' + t.slice(0, 200)); }
+    for await (const chunk of sseStream(resp)) {
+      const delta = S.provider === 'gemini'
+        ? (chunk.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '')
+        : (chunk.choices?.[0]?.delta?.content || '');
+      if (delta) { full += delta; assistantEl.textContent = full; $('chat').scrollTop = $('chat').scrollHeight; }
+    }
+  } catch (e) {
+    showError(String(e.message || e));
+    if (!full) assistantEl.textContent = '⚠ ' + (e.message || e);
+  }
+  if (full) {
+    history.push({ role: 'assistant', content: full });
+    localStorage.setItem('vb.history', JSON.stringify(history.slice(-40)));
+    setStatus('idle');
+    speak(full);
+  }
+}
+
+/* ---------- Notes ---------- */
+function renderNotes() {
+  $('notesList').innerHTML = '';
+  notes.slice().reverse().forEach((n) => {
+    const d = document.createElement('div');
+    d.className = 'note';
+    const t = document.createElement('div'); t.className = 't'; t.textContent = new Date(n.ts).toLocaleString('en-IN');
+    const x = document.createElement('span'); x.className = 'x'; x.textContent = '✕';
+    x.onclick = () => { notes = notes.filter(m => m.ts !== n.ts); localStorage.setItem('vb.notes', JSON.stringify(notes)); renderNotes(); };
+    t.prepend(x);
+    const b = document.createElement('div'); b.textContent = n.text;
+    d.append(t, b);
+    $('notesList').appendChild(d);
+  });
+}
+function saveNote() {
+  if (history.length < 2) return showError('Abhi kuch save karne layak nahi hai.');
+  const u = history[history.length - 2], a = history[history.length - 1];
+  notes.push({ ts: Date.now(), text: `ME: ${u.content}\n\nAI: ${a.content}` });
+  localStorage.setItem('vb.notes', JSON.stringify(notes));
+  renderNotes();
+  const msgs = document.querySelectorAll('.msg.assistant'); msgs[msgs.length - 1]?.classList.add('note-saved');
+}
+function exportNotes() {
+  const md = '# Voice Brain — Notes\n\n' + notes.map(n => `## ${new Date(n.ts).toLocaleString('en-IN')}\n\n${n.text}\n`).join('\n---\n\n');
+  const blob = new Blob([md || '# no notes yet'], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `voice-brain-notes-${new Date().toISOString().slice(0, 10)}.md`;
+  a.click();
+}
+
+/* ---------- Settings UI ---------- */
+function toggleSettings(open) {
+  $('settings').classList.toggle('hidden', !open);
+  if (open) {
+    $('provider').value = S.provider; $('apiKey').value = S.apiKey; $('model').value = S.model;
+    $('systemPrompt').value = S.systemPrompt; $('lang').value = S.lang; $('autoSpeak').value = S.autoSpeak;
+  }
+}
+$('provider').onchange = () => { $('model').value = MODELS[$('provider').value]; };
+$('saveSettings').onclick = () => {
+  S = { provider: $('provider').value, apiKey: $('apiKey').value.trim(), model: $('model').value.trim(),
+        systemPrompt: $('systemPrompt').value, lang: $('lang').value.trim() || 'en-IN', autoSpeak: $('autoSpeak').value };
+  if (rec) rec.lang = S.lang;
+  localStorage.setItem('vb.settings', JSON.stringify(S));
+  toggleSettings(false);
+};
+$('closeSettings').onclick = () => toggleSettings(false);
+$('settings').onclick = (e) => { if (e.target === $('settings')) toggleSettings(false); };
+
+/* ---------- Wire up ---------- */
+$('micBtn').onclick = toggleMic;
+$('stopBtn').onclick = () => { speechSynthesis.cancel(); setStatus('idle'); };
+$('noteBtn').onclick = saveNote;
+$('exportBtn').onclick = exportNotes;
+$('clearBtn').onclick = () => { history = []; localStorage.removeItem('vb.history'); renderHistory(); };
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && !/input|textarea|select/i.test(document.activeElement.tagName)) { e.preventDefault(); toggleMic(); }
+  if (e.key === 'Escape') toggleSettings(false);
+});
+renderHistory();
+renderNotes();
+setStatus(S.apiKey ? 'ready' : 'no key');
+</script>
+</body>
+</html>
