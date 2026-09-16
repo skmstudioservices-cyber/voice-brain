@@ -89,14 +89,19 @@
     <label>LLM Provider</label>
     <select id="provider">
       <option value="groq">Groq (free, fastest)</option>
+      <option value="cf">Cloudflare Workers AI (free 10k neurons/day)</option>
       <option value="gemini">Google Gemini (free tier)</option>
       <option value="openai">OpenAI</option>
     </select>
-    <div class="hint">Groq key: console.groq.com (free) · Gemini key: aistudio.google.com (free)</div>
+    <div class="hint">Groq: console.groq.com · Gemini: aistudio.google.com · CF: Workers AI token + Account ID (see README)</div>
     <label>API Key <small>(stays in this browser only)</small></label>
     <input id="apiKey" type="password" placeholder="paste key">
+    <div class="hint" id="cfHint">Cloudflare: create a token with ONLY “Workers AI → Read” permission (dashboard → My Profile → API Tokens). NEVER paste your main CF token here.</div>
+    <label>Cloudflare Account ID <small>(sirf Workers AI provider ke liye)</small></label>
+    <input id="accountId" placeholder="32-character account id (dashboard right sidebar)">
     <label>Model</label>
     <input id="model" placeholder="llama-3.3-70b-versatile">
+    <div class="hint">CF quick checks: @cf/meta/llama-3.1-8b-instruct-fp8-fast (neuron-cheap) · CF full: @cf/meta/llama-3.3-70b-instruct-fp8-fast</div>
     <label>System prompt</label>
     <textarea id="systemPrompt"></textarea>
     <div class="row">
@@ -120,12 +125,18 @@
 const DEFAULTS = {
   provider: 'groq',
   apiKey: '',
+  accountId: '',
   model: 'llama-3.3-70b-versatile',
   systemPrompt: 'You are my personal thinking partner for brain dumps and brainstorming. Keep replies SHORT and conversational (2-5 sentences) unless I ask for depth. Ask sharp follow-up questions. Hinglish is fine. When I dump raw thoughts, structure them into crisp bullet points. Never pad or flatter.',
   lang: 'en-IN',
   autoSpeak: '1',
 };
-const MODELS = { groq: 'llama-3.3-70b-versatile', gemini: 'gemini-2.0-flash', openai: 'gpt-4o-mini' };
+const MODELS = {
+  groq: 'llama-3.3-70b-versatile',
+  cf: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+  gemini: 'gemini-2.0-flash',
+  openai: 'gpt-4o-mini',
+};
 let S = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('vb.settings') || '{}') };
 let history = JSON.parse(localStorage.getItem('vb.history') || '[]'); // [{role, content}]
 let notes = JSON.parse(localStorage.getItem('vb.notes') || '[]');
@@ -220,6 +231,7 @@ async function* sseStream(resp) {
 
 async function sendMessage(text) {
   if (!S.apiKey) { showError('Pehle Settings mein API key daalo (⚙ upar right).'); toggleSettings(true); return; }
+  if (S.provider === 'cf' && !S.accountId) { showError('Cloudflare provider ke liye Account ID bhi chahiye (Settings).'); toggleSettings(true); return; }
   history.push({ role: 'user', content: text });
   renderMsg('user', text);
   setStatus('thinking');
@@ -235,6 +247,12 @@ async function sendMessage(text) {
           contents: history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
         }),
       });
+    } else if (S.provider === 'cf') {
+      // Cloudflare Workers AI — free tier 10k neurons/day. Use a token with ONLY "Workers AI: Read".
+      resp = await fetch(`https://api.cloudflare.com/client/v4/accounts/${S.accountId}/ai/run/${S.model}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + S.apiKey },
+        body: JSON.stringify({ stream: true, messages: [{ role: 'system', content: S.systemPrompt }, ...history] }),
+      });
     } else {
       const url = S.provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
       resp = await fetch(url, {
@@ -249,7 +267,9 @@ async function sendMessage(text) {
     for await (const chunk of sseStream(resp)) {
       const delta = S.provider === 'gemini'
         ? (chunk.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '')
-        : (chunk.choices?.[0]?.delta?.content || '');
+        : S.provider === 'cf'
+          ? (chunk.response || '')
+          : (chunk.choices?.[0]?.delta?.content || '');
       if (delta) { full += delta; assistantEl.textContent = full; $('chat').scrollTop = $('chat').scrollHeight; }
     }
   } catch (e) {
@@ -300,13 +320,15 @@ function exportNotes() {
 function toggleSettings(open) {
   $('settings').classList.toggle('hidden', !open);
   if (open) {
-    $('provider').value = S.provider; $('apiKey').value = S.apiKey; $('model').value = S.model;
+    $('provider').value = S.provider; $('apiKey').value = S.apiKey; $('accountId').value = S.accountId;
+    $('model').value = S.model;
     $('systemPrompt').value = S.systemPrompt; $('lang').value = S.lang; $('autoSpeak').value = S.autoSpeak;
   }
 }
 $('provider').onchange = () => { $('model').value = MODELS[$('provider').value]; };
 $('saveSettings').onclick = () => {
-  S = { provider: $('provider').value, apiKey: $('apiKey').value.trim(), model: $('model').value.trim(),
+  S = { provider: $('provider').value, apiKey: $('apiKey').value.trim(), accountId: $('accountId').value.trim(),
+        model: $('model').value.trim(),
         systemPrompt: $('systemPrompt').value, lang: $('lang').value.trim() || 'en-IN', autoSpeak: $('autoSpeak').value };
   if (rec) rec.lang = S.lang;
   localStorage.setItem('vb.settings', JSON.stringify(S));
