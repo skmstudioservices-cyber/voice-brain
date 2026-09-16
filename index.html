@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Voice Brain — thinking partner</title>
+<script>window.__VB_PROXY_KEY__ = "__VB_PROXY_KEY__"; /* worker serving this page replaces the placeholder */</script>
 <style>
   :root {
     --bg: #050506; --panel: #0d0d10; --panel2: #131318;
@@ -67,14 +68,18 @@
   /* ---------- Notes ---------- */
   #notesBackdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 8; display: none; }
   #notesBackdrop.open { display: block; }
-  aside { width: min(380px, 92vw); border-left: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; flex-shrink: 0; }
+  aside { width: min(400px, 92vw); border-left: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; flex-shrink: 0; }
   aside h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 16px 16px 8px; display: flex; justify-content: space-between; align-items: center; }
   #notesList { flex: 1; overflow-y: auto; padding: 0 12px; display: flex; flex-direction: column; gap: 10px; }
   .note { background: var(--panel2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 16px; }
-  .note .t { color: var(--gold); font-size: 13px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .note .t { color: var(--gold); font-size: 13px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .note .acts { margin-left: auto; display: flex; gap: 8px; }
   .note .acts span { cursor: pointer; user-select: none; }
   .note .b { white-space: pre-wrap; }
+  .note .badge { display: inline-block; font-size: 12px; color: #141410; background: var(--gold); border-radius: 10px; padding: 1px 8px; font-weight: 700; }
+  .note details { margin-top: 8px; }
+  .note summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  .note .raw { margin-top: 6px; color: var(--muted); font-size: 15px; white-space: pre-wrap; border-left: 2px solid var(--border); padding-left: 10px; }
   .note textarea { width: 100%; min-height: 100px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; font: inherit; }
   .note .editrow { margin-top: 8px; display: flex; gap: 8px; }
   .note .editrow button { padding: 6px 12px; font-size: 14px; }
@@ -92,7 +97,6 @@
   .srow { display: flex; gap: 10px; }
   .card .actions { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; }
 
-  /* Mobile: notes drawer */
   @media (max-width: 899px) {
     aside { position: fixed; top: 0; right: 0; bottom: 0; z-index: 9; transform: translateX(105%); transition: transform .25s; box-shadow: -12px 0 40px rgba(0,0,0,.5); }
     aside.open { transform: translateX(0); }
@@ -133,7 +137,7 @@
     </div>
   </section>
   <aside id="notesPanel">
-    <h2>Notes <span style="font-size:12px; text-transform:none">(auto-saved)</span></h2>
+    <h2>Notes <span style="font-size:12px; text-transform:none">(auto-saved · clean + raw)</span></h2>
     <div id="notesList"></div>
     <div class="actions">
       <button id="cleanAllBtn" title="Sab notes LLM se clean karo">✨ Clean all</button>
@@ -155,12 +159,12 @@
     </select>
     <label>Proxy URL <small>(cfproxy)</small></label>
     <input id="proxyUrl" placeholder="https://voice-brain-proxy.india-in.workers.dev">
-    <label>Proxy Key <small>(cfproxy)</small></label>
+    <label>Proxy Key <small>(cfproxy — workers.dev URL se kholo to yeh khud-ba-khud mil jata hai)</small></label>
     <input id="proxyKey" type="password" placeholder="x-proxy-key value">
     <label>API Key <small>(doosre providers, is browser mein hi rehti hai)</small></label>
     <input id="apiKey" type="password" placeholder="paste key (not needed for proxy)">
     <label>Model</label>
-    <input id="model" placeholder="llama-3.3-70b-versatile">
+    <input id="model" placeholder="@cf/meta/llama-3.3-70b-instruct-fp8-fast">
     <div class="hint">CF quick: @cf/meta/llama-3.1-8b-instruct-fp8-fast · CF full: @cf/meta/llama-3.3-70b-instruct-fp8-fast</div>
     <div class="srow">
       <div style="flex:1">
@@ -211,6 +215,18 @@ const MODELS = {
   openai: 'gpt-4o-mini',
 };
 let S = { ...DEFAULTS, ...JSON.parse(localStorage.getItem('vb.settings') || '{}') };
+
+// Zero-setup: when served from the proxy worker, the key is injected into this page —
+// auto-apply it (and re-apply on every load, so key rotation propagates automatically).
+(function applyInjectedKey() {
+  const k = window.__VB_PROXY_KEY__;
+  if (k && k !== '__VB_PROXY_KEY__') {
+    S.proxyKey = k;
+    S.proxyUrl = location.origin;
+    localStorage.setItem('vb.settings', JSON.stringify(S));
+  }
+})();
+
 let history = JSON.parse(localStorage.getItem('vb.history') || '[]');
 let notes = JSON.parse(localStorage.getItem('vb.notes') || '[]');
 
@@ -239,7 +255,7 @@ function renderMsg(role, text, isNote) {
 function renderHistory() {
   $('chat').innerHTML = '';
   history.forEach(m => renderMsg(m.role, m.content));
-  if (!history.length) renderMsg('assistant', 'Mic dabao (ya Space) aur bolna shuru karo. Har exchange apne aap Notes mein save hota hai — wahan ✨ Clean se umm/amm/fluff hata ke crisp note bana sakte ho, ✏️ se edit bhi.');
+  if (!history.length) renderMsg('assistant', 'Mic dabao (ya Space) aur bolna shuru karo. Har exchange apne aap Notes mein save hota hai — ✨ Clean se AI version banta hai, original bhi sath rehta hai cross-check ke liye.');
 }
 
 /* ---------- STT ---------- */
@@ -312,7 +328,6 @@ async function* sseStream(resp) {
   }
 }
 
-// Build the provider-appropriate fetch for a full message list; returns Response.
 async function llmFetch(messages) {
   if (S.provider === 'gemini') {
     return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${S.model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(S.apiKey)}`, {
@@ -342,12 +357,11 @@ function credsReady() {
   return !!S.apiKey;
 }
 
-// Ask the LLM with a full message list; streams, calls onDelta per chunk, returns full text.
 async function askLLM(messages, onDelta) {
   const resp = await llmFetch(messages);
   if (!resp.ok) {
     const t = await resp.text();
-    if (resp.status === 401 && S.provider === 'cfproxy') throw new Error('Proxy key galat ya missing — ⚙ Settings mein Proxy Key dobara paste karo.');
+    if (resp.status === 401 && S.provider === 'cfproxy') throw new Error('Proxy key galat ya missing — workers.dev URL se kholo (key auto-milti hai) ya Settings mein paste karo.');
     throw new Error('API ' + resp.status + ': ' + t.slice(0, 200));
   }
   let full = '';
@@ -362,7 +376,7 @@ async function askLLM(messages, onDelta) {
 
 async function sendMessage(text) {
   if (!credsReady()) {
-    showError(S.provider === 'cfproxy' ? 'Proxy Key daalo — ⚙ Settings (Proxy URL + Proxy Key).' : 'Pehle Settings (⚙) mein API key daalo.');
+    showError('voice-brain-proxy.india-in.workers.dev kholo — wahan sab khud-ba-khud set hai.');
     toggleSettings(true);
     return;
   }
@@ -388,7 +402,7 @@ async function sendMessage(text) {
   }
 }
 
-/* ---------- Notes (Wispr-style) ---------- */
+/* ---------- Notes: raw + AI-cleaned versions ---------- */
 const CLEAN_PROMPT = 'You clean up voice notes. Rewrite the note: remove ALL filler words (umm, amm, hmm, matlab, yaar, haan, so, like), remove repetition and small talk, fix grammar, keep the Hinglish/language mix as-is, keep EVERY real point and name/number, format as crisp bullets if it is a list of ideas (else short paragraph). Reply with ONLY the cleaned note text — no preamble.';
 
 function addNote(userText, aiText) {
@@ -401,22 +415,40 @@ function addNote(userText, aiText) {
   if (S.autoClean === '1') cleanNote(notes[notes.length - 1].ts);
 }
 
+function noteCard(n) {
+  return [...document.querySelectorAll('.note')].find(el => el.dataset.ts === String(n.ts));
+}
+
 function renderNotes() {
   $('notesList').innerHTML = '';
   notes.slice().reverse().forEach((n) => {
     const d = document.createElement('div');
-    d.className = 'note';
+    d.className = 'note'; d.dataset.ts = n.ts;
     const t = document.createElement('div'); t.className = 't';
     t.textContent = `📌 ${n.title} · ${new Date(n.ts).toLocaleString('en-IN')}`;
     const acts = document.createElement('span'); acts.className = 'acts';
     const mk = (lbl, title, fn) => { const s = document.createElement('span'); s.textContent = lbl; s.title = title; s.onclick = fn; return s; };
     acts.append(
-      mk('✏️', 'Edit', () => editNote(n.ts)),
+      mk('✏️', 'Edit original', () => editNote(n.ts)),
       mk('✨', 'Clean with AI', () => cleanNote(n.ts)),
       mk('✕', 'Delete', () => { notes = notes.filter(m => m.ts !== n.ts); localStorage.setItem('vb.notes', JSON.stringify(notes)); renderNotes(); })
     );
     t.appendChild(acts);
-    const b = document.createElement('div'); b.className = 'b'; b.textContent = n.text;
+
+    const b = document.createElement('div'); b.className = 'b';
+    if (n.clean) {
+      const badge = document.createElement('div'); badge.style.marginBottom = '6px';
+      const sp = document.createElement('span'); sp.className = 'badge'; sp.textContent = '✨ AI-cleaned';
+      badge.appendChild(sp);
+      const cleanDiv = document.createElement('div'); cleanDiv.textContent = n.clean;
+      const det = document.createElement('details');
+      const sum = document.createElement('summary'); sum.textContent = '📄 Original (chat version) — cross-check ke liye';
+      const raw = document.createElement('div'); raw.className = 'raw'; raw.textContent = n.text;
+      det.append(sum, raw);
+      b.append(badge, cleanDiv, det);
+    } else {
+      b.textContent = n.text;
+    }
     d.append(t, b);
     $('notesList').appendChild(d);
   });
@@ -424,9 +456,7 @@ function renderNotes() {
 
 function editNote(ts) {
   const n = notes.find(m => m.ts === ts); if (!n) return;
-  renderNotes();
-  const card = [...document.querySelectorAll('.note')].find(el => el.querySelector('.t')?.textContent.includes(new Date(n.ts).toLocaleString('en-IN')));
-  if (!card) return;
+  const card = noteCard(n); if (!card) return;
   const b = card.querySelector('.b');
   b.innerHTML = '';
   const ta = document.createElement('textarea'); ta.value = n.text; b.appendChild(ta);
@@ -441,11 +471,11 @@ function editNote(ts) {
 async function cleanNote(ts) {
   const n = notes.find(m => m.ts === ts); if (!n) return;
   if (!credsReady()) { showError('Clean ke liye provider setup chahiye (Settings).'); toggleSettings(true); return; }
-  const card = [...document.querySelectorAll('.note')].find(el => el.querySelector('.t')?.textContent.includes(new Date(n.ts).toLocaleString('en-IN')));
-  if (card) card.querySelector('.b').textContent = '✨ cleaning...';
+  const card = noteCard(n);
+  if (card) { const b = card.querySelector('.b'); b.innerHTML = ''; b.textContent = '✨ cleaning...'; }
   try {
     const out = await askLLM([{ role: 'system', content: CLEAN_PROMPT }, { role: 'user', content: n.text }]);
-    if (out) { n.text = out.trim(); localStorage.setItem('vb.notes', JSON.stringify(notes)); }
+    if (out) { n.clean = out.trim(); localStorage.setItem('vb.notes', JSON.stringify(notes)); } // raw n.text preserved for cross-check
   } catch (e) { showError('Clean fail: ' + (e.message || e)); }
   renderNotes();
 }
@@ -456,7 +486,11 @@ async function cleanAll() {
 }
 
 function exportNotes() {
-  const md = '# Voice Brain — Notes\n\n' + notes.map(n => `## ${n.title} (${new Date(n.ts).toLocaleString('en-IN')})\n\n${n.text}\n`).join('\n---\n\n');
+  const md = '# Voice Brain — Notes\n\n' + notes.map(n => {
+    let body = n.text;
+    if (n.clean) body = `**✨ AI-cleaned:**\n\n${n.clean}\n\n**📄 Original (chat version):**\n\n${n.text}`;
+    return `## ${n.title} (${new Date(n.ts).toLocaleString('en-IN')})\n\n${body}\n`;
+  }).join('\n---\n\n');
   const blob = new Blob([md || '# no notes yet'], { type: 'text/markdown' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
