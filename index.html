@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Voice Brain — thinking partner</title>
+<title>SKM Voice Agent — thinking partner</title>
 <script>window.__VB_PROXY_KEY__ = "__VB_PROXY_KEY__"; /* worker serving this page replaces the placeholder */</script>
 <style>
   :root {
@@ -105,7 +105,7 @@
 </head>
 <body>
 <header>
-  <h1>⚡ Voice <span>Brain</span></h1>
+  <h1>⚡ SKM Voice <span>Agent</span></h1>
   <div id="status">idle</div>
   <div class="spacer"></div>
   <button id="notesBtn" title="Notes">📝</button>
@@ -158,7 +158,7 @@
       <option value="openai">OpenAI</option>
     </select>
     <label>Proxy URL <small>(cfproxy)</small></label>
-    <input id="proxyUrl" placeholder="https://voice-brain-proxy.india-in.workers.dev">
+    <input id="proxyUrl" placeholder="https://skm-voice-agent-proxy.india-in.workers.dev">
     <label>Proxy Key <small>(cfproxy — workers.dev URL se kholo to yeh khud-ba-khud mil jata hai)</small></label>
     <input id="proxyKey" type="password" placeholder="x-proxy-key value">
     <label>API Key <small>(doosre providers, is browser mein hi rehti hai)</small></label>
@@ -199,7 +199,7 @@
 const DEFAULTS = {
   provider: 'cfproxy',
   apiKey: '',
-  proxyUrl: 'https://voice-brain-proxy.india-in.workers.dev',
+  proxyUrl: 'https://skm-voice-agent-proxy.india-in.workers.dev',
   proxyKey: '',
   model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
   mode: 'twoway',
@@ -376,7 +376,7 @@ async function askLLM(messages, onDelta) {
 
 async function sendMessage(text) {
   if (!credsReady()) {
-    showError('voice-brain-proxy.india-in.workers.dev kholo — wahan sab khud-ba-khud set hai.');
+    showError('skm-voice-agent-proxy.india-in.workers.dev kholo — wahan sab khud-ba-khud set hai.');
     toggleSettings(true);
     return;
   }
@@ -486,7 +486,7 @@ async function cleanAll() {
 }
 
 function exportNotes() {
-  const md = '# Voice Brain — Notes\n\n' + notes.map(n => {
+  const md = '# SKM Voice Agent — Notes\n\n' + notes.map(n => {
     let body = n.text;
     if (n.clean) body = `**✨ AI-cleaned:**\n\n${n.clean}\n\n**📄 Original (chat version):**\n\n${n.text}`;
     return `## ${n.title} (${new Date(n.ts).toLocaleString('en-IN')})\n\n${body}\n`;
@@ -494,7 +494,7 @@ function exportNotes() {
   const blob = new Blob([md || '# no notes yet'], { type: 'text/markdown' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `voice-brain-notes-${new Date().toISOString().slice(0, 10)}.md`;
+  a.download = `skm-voice-agent-notes-${new Date().toISOString().slice(0, 10)}.md`;
   a.click();
 }
 
