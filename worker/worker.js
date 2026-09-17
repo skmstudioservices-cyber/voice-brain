@@ -1,7 +1,11 @@
 // voice-brain-proxy — thin secure proxy to Cloudflare Workers AI + static app host.
-// - GET /*  : serves the app from voice-brain.pages.dev, injecting the proxy key (zero-setup, auto-rotate friendly)
+// - GET /*  : serves the app from our real Pages domain (voice-brain-15a.pages.dev), injecting the proxy key (zero-setup, auto-rotate friendly)
 // - POST /chat {model, messages} with header x-proxy-key : streams Workers AI SSE
 // Secrets (set via deploy-voicebrain.yml): CF_ACCOUNT_ID, CF_API_TOKEN, PROXY_KEY
+// NOTE: the project's pages.dev subdomain is voice-brain-15a.pages.dev — "voice-brain.pages.dev"
+// belongs to a DIFFERENT Cloudflare account (global subdomain collision). Never fetch that.
+
+const UPSTREAM = 'https://voice-brain-15a.pages.dev';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -47,7 +51,7 @@ export default {
 };
 
 async function serveApp(url, env) {
-  const upstream = await fetch('https://voice-brain.pages.dev' + url.pathname);
+  const upstream = await fetch(UPSTREAM + url.pathname);
   const ct = upstream.headers.get('content-type') || 'text/html; charset=utf-8';
   if (ct.includes('text/html')) {
     let html = await upstream.text();
